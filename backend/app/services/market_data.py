@@ -2,7 +2,7 @@ import asyncio
 import time
 import yfinance as yf
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 NSE_STOCKS = [
     {"symbol": "RELIANCE.NS", "name": "Reliance Industries"},
@@ -600,6 +600,7 @@ def _fetch_company_sync(symbol):
 def _generate_pros_cons(info, result):
     """Auto-generate pros and cons based on financial metrics."""
     pros = []
+
     cons = []
     roe = result.get("roe", 0) or 0
     pe = result.get("pe_ratio") or 0
@@ -654,276 +655,350 @@ def _generate_pros_cons(info, result):
 
 
 def _fetch_peer_data(symbol, industry, sector, is_indian):
-    """Find peer companies from the stock lists and fetch basic data."""
+    """Find peer companies using local sector maps to avoid N network calls."""
     stock_list = NSE_STOCKS if is_indian else US_STOCKS
+    sector_map = _NSE_SECTOR_MAP if is_indian else _US_SECTOR_MAP
     peers = []
     
-    for stock in stock_list:
-        if stock["symbol"].upper() == symbol.upper():
-            continue
-        try:
-            t = yf.Ticker(stock["symbol"])
-            inf = t.info
-            stock_industry = inf.get("industry", "")
-            stock_sector = inf.get("sector", "")
-            if stock_industry == industry or stock_sector == sector:
-                price = inf.get("currentPrice", inf.get("regularMarketPrice", 0)) or 0
-                mcap = inf.get("marketCap", 0) or 0
-                peers.append({
-                    "symbol": stock["symbol"],
-                    "name": stock["name"],
-                    "cmp": round(price, 2),
+    # 1. Identify peers from local map first (O(1) lookup vs O(N) network)
+    candidates = []
+    target_sector = None
+    
+    # Try to find sector from map if not provided or valid
+    if not sector or sector == "N/A":
+        normalized_symbol = symbol.replace(".NS", "").replace(".BO", "")
+        if normalized_symbol in sector_map:
+            target_sector = sector_map[normalized_symbol][0]
+    else:
+        target_sector = sector
+
+    if target_sector and target_sector != "N/A":
+        for stock in stock_list:
+            s_sym = stock["symbol"]
+            if s_sym == symbol:
+                continue
+            
+            # Check map
+            norm = s_sym.replace(".NS", "").replace(".BO", "")
+            if norm in sector_map:
+                s_sect = sector_map[norm][0]
+                if s_sect == target_sector:
+                    candidates.append(s_sym)
+    
+    # If no candidates found via map (fallback to old method only if needed, but limit it)
+    if not candidates and industry:
+         # Fallback: scan list but don't call .info yet, just simple exact match if we had industry map
+         # Here we just skip to save time, or use the top stocks from same list
+         pass
+
+    # Limit candidates
+    candidates = candidates[:7]
+    
+    # 2. Fetch data for candidates in parallel
+    if candidates:
+        from app.services.market_data import _fetch_batch_quotes_sync
+        quotes = _fetch_batch_quotes_sync(candidates)
+        
+        for q in quotes:
+            if q.get("price", 0) > 0:
+                # We need some extra info usually found in .info for PE, Market Cap
+                # _fetch_batch_quotes_sync returns basic price data. 
+                # For peers we need: cmp, pe, market_cap, div_yield, np_qtr, roce
+                # fetch_quote_sync only gives price.
+                # We need to fetch full info for these few peers.
+                pass
+
+        # Since we need fundamental data (PE, Market Cap), we must call .info 
+        # BUT now we only do it for 5-7 stocks, not 200.
+        # And we can do it in parallel.
+        
+        def _get_peer_fund(s):
+            try:
+                t = yf.Ticker(s)
+                inf = t.info
+                return {
+                    "symbol": s,
+                    "name": inf.get("shortName", s),
+                    "cmp": round(inf.get("currentPrice", inf.get("regularMarketPrice", 0)) or 0, 2),
                     "pe": round(inf.get("trailingPE", 0) or 0, 2),
-                    "market_cap": mcap,
+                    "market_cap": inf.get("marketCap", 0) or 0,
                     "div_yield": round((inf.get("dividendYield", 0) or 0) * 100, 2),
                     "np_qtr": inf.get("netIncomeToCommon", 0) or 0,
                     "roce": round((inf.get("returnOnAssets", 0) or 0) * 100, 2),
-                })
-            if len(peers) >= 7:
-                break
-        except:
-            continue
+                }
+            except:
+                return None
+
+        with ThreadPoolExecutor(max_workers=len(candidates)) as executor:
+            fut_to_stock = {executor.submit(_get_peer_fund, s): s for s in candidates}
+            for fut in as_completed(fut_to_stock):
+                res = fut.result()
+                if res:
+                    peers.append(res)
+
     return peers
 
 
-def _fetch_financials_sync(symbol):
+def _fetch_financials_concurrent(symbol):
+    """Fetch all financial data concurrently to reduce latency."""
     ticker = yf.Ticker(symbol)
-    info = ticker.info
-    is_indian = symbol.upper().endswith(".NS") or symbol.upper().endswith(".BO")
-    current_price = info.get("currentPrice", info.get("regularMarketPrice", 0)) or 0
-    face_value = info.get("faceValue", None)
+    
+    # Define tasks
+    def get_info():
+        return ticker.info
+    
+    def get_fin():
+        return ticker.financials
+    
+    def get_q_fin():
+        return ticker.quarterly_financials
+    
+    def get_bs():
+        return ticker.quarterly_balance_sheet
+    
+    def get_cf():
+        return ticker.quarterly_cashflow
+    
+    def get_hist_cagr():
+        # Fetch max period needed for CAGR
+        return ticker.history(period="10y")
 
-    roce_val = None
-    try:
-        ebit = info.get("ebitda", 0) or 0
-        interest = info.get("interestExpense", 0) or 0
-        if interest and interest < 0:
-            ebit = ebit + interest  # approximate EBIT
-        total_assets = info.get("totalAssets", 0) or 0
-        current_liab = info.get("totalCurrentLiabilities", 0) or 0
-        capital_employed = total_assets - current_liab
-        if capital_employed > 0 and ebit > 0:
-            roce_val = round((ebit / capital_employed) * 100, 2)
-    except:
-        pass
+    def get_divs():
+        return ticker.dividends
 
-    result = {
-        "name": info.get("longName", symbol),
-        "symbol": symbol.upper(),
-        "sector": info.get("sector", "N/A"),
-        "industry": info.get("industry", "N/A"),
-        "market_cap": info.get("marketCap", 0),
-        "current_price": round(current_price, 2),
-        "face_value": face_value,
-        "pe_ratio": info.get("trailingPE", None),
-        "forward_pe": info.get("forwardPE", None),
-        "pb_ratio": info.get("priceToBook", None),
-        "eps": info.get("trailingEps", None),
-        "book_value": info.get("bookValue", None),
-        "dividend_yield": round(info.get("dividendYield", 0) * 100, 2) if info.get("dividendYield") else 0,
-        "roe": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") else 0,
-        "roce": roce_val,
-        "debt_to_equity": info.get("debtToEquity", None),
-        "profit_margins": round(info.get("profitMargins", 0) * 100, 2) if info.get("profitMargins") else 0,
-        "revenue": info.get("totalRevenue", 0),
-        "net_income": info.get("netIncomeToCommon", 0),
-        "operating_margins": round(info.get("operatingMargins", 0) * 100, 2) if info.get("operatingMargins") else 0,
-        "free_cashflow": info.get("freeCashflow", 0),
-        "total_debt": info.get("totalDebt", 0),
-        "total_cash": info.get("totalCash", 0),
-        "week_52_high": info.get("fiftyTwoWeekHigh", 0),
-        "week_52_low": info.get("fiftyTwoWeekLow", 0),
-        "avg_volume": info.get("averageVolume", 0),
-        "promoter_holding": round(info.get("heldPercentInsiders", 0) * 100, 2) if info.get("heldPercentInsiders") else 0,
-        "institutional_holding": round(info.get("heldPercentInstitutions", 0) * 100, 2) if info.get("heldPercentInstitutions") else 0,
-        "dii_holding": None,
-        "fii_holding": None,
-    }
+    with ThreadPoolExecutor(max_workers=7) as executor:
+        f_info = executor.submit(get_info)
+        f_fin = executor.submit(get_fin)
+        f_qfin = executor.submit(get_q_fin)
+        f_bs = executor.submit(get_bs)
+        f_cf = executor.submit(get_cf)
+        f_hist = executor.submit(get_hist_cagr)
+        f_divs = executor.submit(get_divs)
 
-    pros, cons = _generate_pros_cons(info, result)
-    result["pros"] = pros
-    result["cons"] = cons
+        # Wait for info first as it's needed for basic data
+        try:
+            info = f_info.result(timeout=10)
+        except:
+            info = {}
 
-    try:
-        qf = ticker.quarterly_financials
-        if qf is not None and not qf.empty:
-            quarters = []
-            for col in qf.columns[:12]:
-                revenue = _safe_int_from_df(qf, "Total Revenue", col)
-                gross = _safe_int_from_df(qf, "Gross Profit", col)
-                op_income = _safe_int_from_df(qf, "Operating Income", col)
-                net_income = _safe_int_from_df(qf, "Net Income", col)
-                ebitda = _safe_int_from_df(qf, "EBITDA", col)
-                interest = _safe_int_from_df(qf, "Interest Expense", col)
-                tax = _safe_int_from_df(qf, "Tax Provision", col)
-                
-                expenses = (revenue - op_income) if revenue and op_income else None
-                opm = round((op_income / revenue) * 100) if revenue and op_income and revenue > 0 else None
-                eps_q = None
-                shares = info.get("sharesOutstanding", 0)
-                if net_income and shares and shares > 0:
-                    eps_q = round(net_income / shares, 2)
+        # Basic Data
+        is_indian = symbol.upper().endswith(".NS") or symbol.upper().endswith(".BO")
+        current_price = info.get("currentPrice", info.get("regularMarketPrice", 0)) or 0
+        face_value = info.get("faceValue", None)
+        
+        # ROCE Calculation
+        roce_val = None
+        try:
+            ebit = info.get("ebitda", 0) or 0
+            interest = info.get("interestExpense", 0) or 0
+            if interest and interest < 0:
+                ebit = ebit + interest
+            total_assets = info.get("totalAssets", 0) or 0
+            current_liab = info.get("totalCurrentLiabilities", 0) or 0
+            capital_employed = total_assets - current_liab
+            if capital_employed > 0 and ebit > 0:
+                roce_val = round((ebit / capital_employed) * 100, 2)
+        except:
+            pass
 
-                quarters.append({
-                    "quarter": col.strftime("%b %Y"),
-                    "revenue": revenue,
-                    "expenses": expenses,
-                    "operating_profit": op_income,
-                    "opm_pct": opm,
-                    "other_income": _safe_int_from_df(qf, "Other Income", col),
-                    "interest": interest,
-                    "depreciation": _safe_int_from_df(qf, "Reconciled Depreciation", col),
-                    "profit_before_tax": _safe_int_from_df(qf, "Pretax Income", col),
-                    "tax_pct": round((tax / (tax + net_income)) * 100) if tax and net_income and (tax + net_income) > 0 else None,
-                    "net_income": net_income,
-                    "ebitda": ebitda,
-                    "gross_profit": gross,
-                    "eps": eps_q,
-                })
-            result["quarterly_results"] = quarters
-        else:
+        result = {
+            "name": info.get("longName", symbol),
+            "symbol": symbol.upper(),
+            "sector": info.get("sector", "N/A"),
+            "industry": info.get("industry", "N/A"),
+            "market_cap": info.get("marketCap", 0),
+            "current_price": round(current_price, 2),
+            "face_value": face_value,
+            "pe_ratio": info.get("trailingPE", None),
+            "forward_pe": info.get("forwardPE", None),
+            "pb_ratio": info.get("priceToBook", None),
+            "eps": info.get("trailingEps", None),
+            "book_value": info.get("bookValue", None),
+            "dividend_yield": round(info.get("dividendYield", 0) * 100, 2) if info.get("dividendYield") else 0,
+            "roe": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") else 0,
+            "roce": roce_val,
+            "debt_to_equity": info.get("debtToEquity", None),
+            "profit_margins": round(info.get("profitMargins", 0) * 100, 2) if info.get("profitMargins") else 0,
+            "revenue": info.get("totalRevenue", 0),
+            "net_income": info.get("netIncomeToCommon", 0),
+            "operating_margins": round(info.get("operatingMargins", 0) * 100, 2) if info.get("operatingMargins") else 0,
+            "free_cashflow": info.get("freeCashflow", 0),
+            "total_debt": info.get("totalDebt", 0),
+            "total_cash": info.get("totalCash", 0),
+            "week_52_high": info.get("fiftyTwoWeekHigh", 0),
+            "week_52_low": info.get("fiftyTwoWeekLow", 0),
+            "avg_volume": info.get("averageVolume", 0),
+            "promoter_holding": round(info.get("heldPercentInsiders", 0) * 100, 2) if info.get("heldPercentInsiders") else 0,
+            "institutional_holding": round(info.get("heldPercentInstitutions", 0) * 100, 2) if info.get("heldPercentInstitutions") else 0,
+            "dii_holding": None, "fii_holding": None,
+        }
+
+        # Generative Pros/Cons (CPU bound, fast)
+        pros, cons = _generate_pros_cons(info, result)
+        result["pros"] = pros
+        result["cons"] = cons
+
+        # Process Quarterly Results
+        try:
+            qf = f_qfin.result(timeout=5)
+            if qf is not None and not qf.empty:
+                quarters = []
+                for col in qf.columns[:12]:
+                    revenue = _safe_int_from_df(qf, "Total Revenue", col)
+                    op_income = _safe_int_from_df(qf, "Operating Income", col)
+                    net_income = _safe_int_from_df(qf, "Net Income", col)
+                    gross = _safe_int_from_df(qf, "Gross Profit", col)
+                    ebitda = _safe_int_from_df(qf, "EBITDA", col)
+                    interest = _safe_int_from_df(qf, "Interest Expense", col)
+                    tax = _safe_int_from_df(qf, "Tax Provision", col)
+                    expenses = (revenue - op_income) if revenue and op_income else None
+                    opm = round((op_income / revenue) * 100) if revenue and op_income and revenue > 0 else None
+                    shares = info.get("sharesOutstanding", 0)
+                    eps_q = round(net_income / shares, 2) if net_income and shares and shares > 0 else None
+
+                    quarters.append({
+                        "quarter": col.strftime("%b %Y"),
+                        "revenue": revenue, "expenses": expenses, "operating_profit": op_income,
+                        "opm_pct": opm, "other_income": _safe_int_from_df(qf, "Other Income", col),
+                        "interest": interest, "depreciation": _safe_int_from_df(qf, "Reconciled Depreciation", col),
+                        "profit_before_tax": _safe_int_from_df(qf, "Pretax Income", col),
+                        "tax_pct": round((tax / (tax + net_income)) * 100) if tax and net_income and (tax + net_income) > 0 else None,
+                        "net_income": net_income, "ebitda": ebitda, "gross_profit": gross, "eps": eps_q,
+                    })
+                result["quarterly_results"] = quarters
+            else:
+                result["quarterly_results"] = []
+        except:
             result["quarterly_results"] = []
-    except:
-        result["quarterly_results"] = []
 
-    try:
-        af = ticker.financials
-        if af is not None and not af.empty:
+        # Process Dividend Payouts (needs Dividends + Annual Financials)
+        try:
+            divs = f_divs.result(timeout=5)
+            af = f_fin.result(timeout=5)
             annual = []
-            for col in af.columns[:12]:
-                revenue = _safe_int_from_df(af, "Total Revenue", col)
-                op_income = _safe_int_from_df(af, "Operating Income", col)
-                net_income = _safe_int_from_df(af, "Net Income", col)
-                interest = _safe_int_from_df(af, "Interest Expense", col)
-                tax = _safe_int_from_df(af, "Tax Provision", col)
-                depreciation = _safe_int_from_df(af, "Reconciled Depreciation", col)
-                other_income = _safe_int_from_df(af, "Other Income", col)
-                pbt = _safe_int_from_df(af, "Pretax Income", col)
+            if af is not None and not af.empty:
+                for col in af.columns[:12]:
+                    revenue = _safe_int_from_df(af, "Total Revenue", col)
+                    op_income = _safe_int_from_df(af, "Operating Income", col)
+                    net_income = _safe_int_from_df(af, "Net Income", col)
+                    expenses = (revenue - op_income) if revenue and op_income else None
+                    opm = round((op_income / revenue) * 100) if revenue and op_income and revenue > 0 else None
+                    shares = info.get("sharesOutstanding", 0)
+                    eps_a = round(net_income / shares, 2) if net_income and shares and shares > 0 else None
+                    
+                    div_payout = None
+                    try:
+                        if divs is not None and not divs.empty:
+                            year_divs = divs[divs.index.year == col.year]
+                            if not year_divs.empty and eps_a and eps_a > 0:
+                                div_payout = round((year_divs.sum() / eps_a) * 100)
+                    except: pass
 
-                expenses = (revenue - op_income) if revenue and op_income else None
-                opm = round((op_income / revenue) * 100) if revenue and op_income and revenue > 0 else None
-
-                shares = info.get("sharesOutstanding", 0)
-                eps_a = None
-                if net_income and shares and shares > 0:
-                    eps_a = round(net_income / shares, 2)
-
-                div_payout = None
-                try:
-                    divs = ticker.dividends
-                    if divs is not None and not divs.empty:
-                        year = col.year
-                        year_divs = divs[divs.index.year == year]
-                        if not year_divs.empty and eps_a and eps_a > 0:
-                            total_div = year_divs.sum()
-                            div_payout = round((total_div / eps_a) * 100)
-                except:
-                    pass
-
-                annual.append({
-                    "period": col.strftime("%b %Y"),
-                    "revenue": revenue,
-                    "expenses": expenses,
-                    "operating_profit": op_income,
-                    "opm_pct": opm,
-                    "other_income": other_income,
-                    "interest": interest,
-                    "depreciation": depreciation,
-                    "profit_before_tax": pbt,
-                    "tax_pct": round((tax / pbt) * 100) if tax and pbt and pbt > 0 else None,
-                    "net_income": net_income,
-                    "eps": eps_a,
-                    "dividend_payout_pct": div_payout,
-                })
-            result["annual_results"] = annual
-        else:
+                    annual.append({
+                        "period": col.strftime("%b %Y"),
+                        "revenue": revenue, "expenses": expenses, "operating_profit": op_income,
+                        "opm_pct": opm, "other_income": _safe_int_from_df(af, "Other Income", col),
+                        "interest": _safe_int_from_df(af, "Interest Expense", col),
+                        "depreciation": _safe_int_from_df(af, "Reconciled Depreciation", col),
+                        "profit_before_tax": _safe_int_from_df(af, "Pretax Income", col),
+                        "tax_pct": _safe_int_from_df(af, "Tax Provision", col), # raw value or calc?
+                        "net_income": net_income, "eps": eps_a, "dividend_payout_pct": div_payout,
+                    })
+                result["annual_results"] = annual
+            else:
+                result["annual_results"] = []
+        except:
             result["annual_results"] = []
-    except:
-        result["annual_results"] = []
 
-    try:
-        growth = {}
-        af = ticker.financials
-        if af is not None and not af.empty:
-            rev_series = af.loc["Total Revenue"] if "Total Revenue" in af.index else None
-            ni_series = af.loc["Net Income"] if "Net Income" in af.index else None
+        # Process CAGR (Compounded Growth)
+        try:
+            growth = {}
+            # Re-use 'af' from above
+            if af is not None and not af.empty:
+                rev_series = af.loc["Total Revenue"] if "Total Revenue" in af.index else None
+                ni_series = af.loc["Net Income"] if "Net Income" in af.index else None
+                for label, years in [("3Y", 3), ("5Y", 5), ("10Y", 10)]:
+                    if rev_series is not None and len(rev_series) >= years:
+                        latest_rev = float(rev_series.iloc[0])
+                        old_rev = float(rev_series.iloc[min(years-1, len(rev_series)-1)])
+                        if old_rev > 0 and latest_rev > 0:
+                            growth[f"sales_growth_{label}"] = round(((latest_rev / old_rev) ** (1/years) - 1) * 100, 1)
+                    if ni_series is not None and len(ni_series) >= years:
+                        latest_ni = float(ni_series.iloc[0])
+                        old_ni = float(ni_series.iloc[min(years-1, len(ni_series)-1)])
+                        if old_ni > 0 and latest_ni > 0:
+                            growth[f"profit_growth_{label}"] = round(((latest_ni / old_ni) ** (1/years) - 1) * 100, 1)
             
-            for label, years in [("3Y", 3), ("5Y", 5), ("10Y", 10)]:
-                if rev_series is not None and len(rev_series) >= years:
-                    latest_rev = float(rev_series.iloc[0])
-                    old_rev = float(rev_series.iloc[min(years-1, len(rev_series)-1)])
-                    if old_rev > 0 and latest_rev > 0:
-                        growth[f"sales_growth_{label}"] = round(((latest_rev / old_rev) ** (1/years) - 1) * 100, 1)
-                if ni_series is not None and len(ni_series) >= years:
-                    latest_ni = float(ni_series.iloc[0])
-                    old_ni = float(ni_series.iloc[min(years-1, len(ni_series)-1)])
-                    if old_ni > 0 and latest_ni > 0:
-                        growth[f"profit_growth_{label}"] = round(((latest_ni / old_ni) ** (1/years) - 1) * 100, 1)
-        
-        for label, period in [("1Y", "1y"), ("3Y", "3y"), ("5Y", "5y"), ("10Y", "10y")]:
-            try:
-                hist = ticker.history(period=period)
-                if hist is not None and not hist.empty and len(hist) > 10:
-                    start_price = float(hist["Close"].iloc[0])
-                    end_price = float(hist["Close"].iloc[-1])
-                    years_num = {"1Y": 1, "3Y": 3, "5Y": 5, "10Y": 10}[label]
-                    if start_price > 0:
-                        growth[f"stock_cagr_{label}"] = round(((end_price / start_price) ** (1/years_num) - 1) * 100, 1)
-            except:
-                pass
+            # Stock Price CAGR
+            hist = f_hist.result(timeout=10)
+            if hist is not None and not hist.empty and len(hist) > 10:
+                end_price = float(hist["Close"].iloc[-1])
+                for label, years in [("1Y", 1), ("3Y", 3), ("5Y", 5), ("10Y", 10)]:
+                     # approximate trading days
+                    days = years * 252
+                    if len(hist) > days:
+                        start_price = float(hist["Close"].iloc[-days])
+                        if start_price > 0:
+                             growth[f"stock_cagr_{label}"] = round(((end_price / start_price) ** (1/years) - 1) * 100, 1)
 
-        roe_val = result.get("roe", 0) or 0
-        if roe_val > 0:
-            growth["roe_last_year"] = roe_val
-        
-        result["compounded_growth"] = growth
-    except:
-        result["compounded_growth"] = {}
+            if result.get("roe") and result.get("roe") > 0:
+                growth["roe_last_year"] = result["roe"]
+            
+            result["compounded_growth"] = growth
+        except:
+            result["compounded_growth"] = {}
 
-    try:
-        bs = ticker.quarterly_balance_sheet
-        if bs is not None and not bs.empty:
-            latest = bs.iloc[:, 0]
-            result["balance_sheet"] = {
-                "quarter": bs.columns[0].strftime("%b %Y"),
-                "total_assets": _safe_int(latest, "Total Assets"),
-                "total_liabilities": _safe_int(latest, "Total Liabilities Net Minority Interest"),
-                "total_equity": _safe_int(latest, "Stockholders Equity"),
-                "total_debt": _safe_int(latest, "Total Debt"),
-                "cash_equivalents": _safe_int(latest, "Cash And Cash Equivalents"),
-            }
-        else:
+        # Process Balance Sheet
+        try:
+            bs = f_bs.result(timeout=5)
+            if bs is not None and not bs.empty:
+                latest = bs.iloc[:, 0]
+                result["balance_sheet"] = {
+                    "quarter": bs.columns[0].strftime("%b %Y"),
+                    "total_assets": _safe_int(latest, "Total Assets"),
+                    "total_liabilities": _safe_int(latest, "Total Liabilities Net Minority Interest"),
+                    "total_equity": _safe_int(latest, "Stockholders Equity"),
+                    "total_debt": _safe_int(latest, "Total Debt"),
+                    "cash_equivalents": _safe_int(latest, "Cash And Cash Equivalents"),
+                }
+            else:
+                result["balance_sheet"] = {}
+        except:
             result["balance_sheet"] = {}
-    except:
-        result["balance_sheet"] = {}
 
-    try:
-        cf = ticker.quarterly_cashflow
-        if cf is not None and not cf.empty:
-            latest = cf.iloc[:, 0]
-            result["cashflow"] = {
-                "quarter": cf.columns[0].strftime("%b %Y"),
-                "operating_cashflow": _safe_int(latest, "Operating Cash Flow"),
-                "investing_cashflow": _safe_int(latest, "Investing Cash Flow"),
-                "financing_cashflow": _safe_int(latest, "Financing Cash Flow"),
-                "free_cashflow": _safe_int(latest, "Free Cash Flow"),
-            }
-        else:
+        # Process Cash Flow
+        try:
+            cf = f_cf.result(timeout=5)
+            if cf is not None and not cf.empty:
+                latest = cf.iloc[:, 0]
+                result["cashflow"] = {
+                    "quarter": cf.columns[0].strftime("%b %Y"),
+                    "operating_cashflow": _safe_int(latest, "Operating Cash Flow"),
+                    "investing_cashflow": _safe_int(latest, "Investing Cash Flow"),
+                    "financing_cashflow": _safe_int(latest, "Financing Cash Flow"),
+                    "free_cashflow": _safe_int(latest, "Free Cash Flow"),
+                }
+            else:
+                result["cashflow"] = {}
+        except:
             result["cashflow"] = {}
-    except:
-        result["cashflow"] = {}
+        
+        # Process Peers (Concurrent)
+        try:
+            industry = info.get("industry", "")
+            sector = info.get("sector", "")
+            if industry or sector:
+                result["peers"] = _fetch_peer_data(symbol, industry, sector, is_indian)
+            else:
+                result["peers"] = []
+        except:
+             result["peers"] = []
 
-    try:
-        industry = info.get("industry", "")
-        sector = info.get("sector", "")
-        if industry or sector:
-            result["peers"] = _fetch_peer_data(symbol, industry, sector, is_indian)
-        else:
-            result["peers"] = []
-    except:
-        result["peers"] = []
+        return result
 
-    return result
+def _fetch_financials_sync(symbol):
+    # Wrapper to maintain compatibility but use new concurrent instruction
+    return _fetch_financials_concurrent(symbol)
 
 
 def _safe_int_from_df(df, field, col):

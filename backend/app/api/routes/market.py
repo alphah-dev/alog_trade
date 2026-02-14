@@ -11,6 +11,9 @@ _HEATMAP_TTL = 300  # 5 minutes
 _indices_cache = {"data": None, "ts": 0}
 _INDICES_TTL = 180  # 3 minutes
 
+_financials_cache = {}
+_FINANCIALS_TTL = 3600  # 1 hour
+
 router = APIRouter()
 
 @router.get("/historical/{symbol}")
@@ -69,9 +72,20 @@ async def get_company_info(symbol: str):
 
 @router.get("/financials/{symbol}")
 async def get_financials(symbol: str):
+    from fastapi.responses import JSONResponse
     try:
+        current_time = time.time()
+        if symbol in _financials_cache:
+            entry = _financials_cache[symbol]
+            if (current_time - entry["ts"]) < _FINANCIALS_TTL:
+                return JSONResponse(content=entry["data"], headers={"X-Cache-Status": "HIT"})
+        
         data = await MarketDataService.get_financials(symbol)
-        return data
+        
+        # Cache the result
+        _financials_cache[symbol] = {"data": data, "ts": current_time}
+        
+        return JSONResponse(content=data, headers={"X-Cache-Status": "MISS"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch financials: {str(e)}")
 

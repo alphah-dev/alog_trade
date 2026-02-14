@@ -3,7 +3,7 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 
 import { createChart, ColorType } from 'lightweight-charts';
 import { api } from '../api';
-import { ArrowUp, ArrowDown, History, Loader, CheckCircle, XCircle, TrendingUp, TrendingDown, Building2, Wallet, Receipt, BarChart3, PieChart, DollarSign, Ruler, ZoomIn, ZoomOut, Maximize2, Activity, Layers, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowUp, ArrowDown, History, Loader, CheckCircle, XCircle, TrendingUp, TrendingDown, Building2, Wallet, Receipt, BarChart3, PieChart, DollarSign, Ruler, ZoomIn, ZoomOut, Maximize2, Activity, Layers, ChevronDown, ChevronUp, Users } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 
 const formatCr = (val) => {

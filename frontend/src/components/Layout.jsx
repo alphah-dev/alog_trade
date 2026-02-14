@@ -3,24 +3,15 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { api } from '../api';
 import { Sun, Moon } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 const Layout = () => {
+
   const [time, setTime] = useState(new Date());
   const [marketStatus, setMarketStatus] = useState(null);
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const { theme, toggleTheme } = useTheme();
 
-  useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
