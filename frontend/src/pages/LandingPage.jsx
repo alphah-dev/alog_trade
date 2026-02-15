@@ -258,10 +258,27 @@ const LandingPage = () => {
           <div><div className="text-2xl font-mono font-black text-bb-text">&lt;50ms</div><div className="text-[10px] text-bb-muted tracking-widest mt-1">AVG LATENCY</div></div>
           <div><div className="text-2xl font-mono font-black text-bb-text">2</div><div className="text-[10px] text-bb-muted tracking-widest mt-1">MARKETS</div></div>
         </div>
+        {/* Scroll indicator */}
+        <div className="absolute bottom-4 inset-x-0 flex justify-center">
+          <div className="flex flex-col items-center gap-2 animate-bounce cursor-pointer" onClick={() => document.getElementById('global-overview')?.scrollIntoView({ behavior: 'smooth' })}>
+            <span className="text-[9px] font-mono text-bb-muted tracking-[0.3em]">SCROLL TO EXPLORE</span>
+            <div className="flex flex-col items-center -space-y-1">
+              <svg width="20" height="10" viewBox="0 0 20 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 2L10 8L18 2" stroke="#FF9900" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <svg width="20" height="10" viewBox="0 0 20 10" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-60">
+                <path d="M2 2L10 8L18 2" stroke="#FF9900" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <svg width="20" height="10" viewBox="0 0 20 10" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-25">
+                <path d="M2 2L10 8L18 2" stroke="#FF9900" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* ── Global Markets Overview ────────────────────────────── */}
-      <section className="landing-section py-16 px-4 md:px-12 border-t border-bb-gray">
+      <section id="global-overview" className="landing-section py-16 px-4 md:px-12">
         <SectionHeader label="GLOBAL OVERVIEW" title="WORLD MARKETS" />
         <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <IndexCard
