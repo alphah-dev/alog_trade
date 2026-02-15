@@ -3,17 +3,20 @@
 @tailwind utilities;
 
 :root {
-  /* Light Mode (Default - NSE Style) */
-  --bg-black: #ffffff;
+  /* Light Mode */
+  --bg-black: #f5f6fa;
   --bg-card: #ffffff;
-  --bg-gray: #f1f3f6;
-  --border-color: #e0e0e0;
-  --text-primary: #1a1a2e;
-  --text-secondary: #333333;
-  --text-muted: #555555;
-  --color-green: #008f75;
-  --color-red: #d32f2f;
-  --color-blue: #005FA7;
+  --bg-gray: #e8eaef;
+  --border-color: #d0d4dc;
+  --text-primary: #111827;
+  --text-secondary: #1f2937;
+  --text-muted: #4b5563;
+  --color-green: #059669;
+  --color-red: #dc2626;
+  --color-blue: #2563eb;
+  --hover-overlay: rgba(0, 0, 0, 0.04);
+  --active-overlay: rgba(0, 0, 0, 0.08);
+  --backdrop-overlay: rgba(0, 0, 0, 0.4);
   --scrollbar-track: #f1f3f6;
   --scrollbar-thumb: #c4c8d0;
   --scrollbar-thumb-hover: #a0a4ac;
@@ -28,11 +31,14 @@
   --bg-gray: #1e222d;
   --border-color: #2a2e39;
   --text-primary: #d1d4dc;
-  --text-secondary: #ffffff;
-  --text-muted: #787b86;
+  --text-secondary: #e5e7eb;
+  --text-muted: #848892;
   --color-green: #26a69a;
   --color-red: #ef5350;
   --color-blue: #2962ff;
+  --hover-overlay: rgba(255, 255, 255, 0.05);
+  --active-overlay: rgba(255, 255, 255, 0.1);
+  --backdrop-overlay: rgba(0, 0, 0, 0.6);
   --scrollbar-track: #0b0e11;
   --scrollbar-thumb: #2a2e39;
   --scrollbar-thumb-hover: #3a3e49;

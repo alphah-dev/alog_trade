@@ -59,7 +59,7 @@ const IndexCard = ({ index, expanded, onToggle }) => {
                         {index.top_stocks.map((stock, i) => {
                             const sUp = stock.change_pct >= 0;
                             return (
-                                <div key={i} className="flex justify-between items-center py-1.5 px-2 hover:bg-white/5 transition-colors rounded">
+                                <div key={i} className="flex justify-between items-center py-1.5 px-2 hover:bg-bb-hover transition-colors rounded">
                                     <span className="text-xs text-bb-orange font-medium">{stock.symbol}</span>
                                     <div className="flex items-center gap-4">
                                         <span className="text-xs text-bb-text tabular-nums">₹{stock.price?.toLocaleString()}</span>
@@ -222,7 +222,7 @@ const MarketIndices = () => {
                                 {indices.map((idx, i) => {
                                     const isUp = idx.change_pct >= 0;
                                     return (
-                                        <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                                        <tr key={i} className="hover:bg-bb-hover transition-colors">
                                             <td className="p-3 font-medium text-bb-orange">{idx.name}</td>
                                             <td className="p-3 text-bb-text tabular-nums">{idx.price?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                                             <td className={`p-3 tabular-nums font-medium ${isUp ? 'text-bb-green' : 'text-bb-red'}`}>

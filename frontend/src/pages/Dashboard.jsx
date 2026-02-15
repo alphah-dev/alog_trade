@@ -8,7 +8,7 @@ const ExitModal = ({ isOpen, onClose, onConfirm, symbol, maxQty, price, currency
   if (!isOpen) return null;
   const sellValue = (qty * price).toFixed(2);
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999]" onClick={onClose}>
+    <div className="fixed inset-0 bg-bb-backdrop backdrop-blur-sm flex items-center justify-center z-[9999]" onClick={onClose}>
       <div className="bg-bb-card border border-bb-border rounded-lg shadow-2xl w-[380px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center px-5 py-3 border-b border-bb-border">
           <h3 className="text-sm font-bold text-bb-text">Exit Position — {symbol}</h3>
@@ -372,7 +372,7 @@ const Dashboard = () => {
                     const pnlPct = invested > 0 ? (pnl / invested * 100) : 0;
                     const isUp = pnl >= 0;
                     return (
-                      <tr key={pos.symbol} className="hover:bg-white/[0.02] transition-colors">
+                      <tr key={pos.symbol} className="hover:bg-bb-hover transition-colors">
                         <td className="px-4 py-3">
                           <div className="font-medium text-bb-text">{pos.symbol.replace('.NS', '')}</div>
                           {quote && <div className={`text-[11px] ${quote.change_pct >= 0 ? 'text-bb-green' : 'text-bb-red'}`}>{quote.change_pct >= 0 ? '+' : ''}{quote.change_pct}%</div>}
@@ -454,7 +454,7 @@ const Dashboard = () => {
                     const usPnlPct = usInvested > 0 ? (usPnl / usInvested * 100) : 0;
                     const usIsUp = usPnl >= 0;
                     return (
-                      <tr key={pos.symbol} className="hover:bg-white/[0.02] transition-colors">
+                      <tr key={pos.symbol} className="hover:bg-bb-hover transition-colors">
                         <td className="px-4 py-3">
                           <div className="font-medium text-bb-blue">{pos.symbol}</div>
                           {usQuote && <div className={`text-[11px] ${usQuote.change_pct >= 0 ? 'text-bb-green' : 'text-bb-red'}`}>{usQuote.change_pct >= 0 ? '+' : ''}{usQuote.change_pct}%</div>}

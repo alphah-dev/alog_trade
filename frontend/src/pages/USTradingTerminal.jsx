@@ -56,7 +56,7 @@ const FinancialsPanel = ({ financials, currency = '$' }) => {
     const growth = financials.compounded_growth || {};
 
     return (
-        <div className="bg-bb-dark border border-bb-border rounded flex flex-col h-[600px]">
+        <div className="bg-bb-dark border border-bb-border rounded flex flex-col">
             <div className="flex border-b border-bb-border overflow-x-auto bg-bb-card z-10 sticky top-0 shrink-0">
                 {sections.map(s => (
                     <button key={s.id} onClick={() => scrollToSection(s.id)}
@@ -66,7 +66,7 @@ const FinancialsPanel = ({ financials, currency = '$' }) => {
                 ))}
             </div>
 
-            <div className="overflow-y-auto custom-scrollbar p-6 space-y-10">
+            <div className="p-6 space-y-10">
 
                 <div id="fin-us-key_ratios">
                     <div className="flex items-center gap-2 mb-4 text-bb-blue font-bold text-sm uppercase tracking-wide">
@@ -181,7 +181,7 @@ const FinancialsPanel = ({ financials, currency = '$' }) => {
                                 </thead>
                                 <tbody className="divide-y divide-bb-border/30">
                                     {financials.peers.map((peer, i) => (
-                                        <tr key={i} className="hover:bg-white/[0.02]">
+                                        <tr key={i} className="hover:bg-bb-hover">
                                             <td className="p-2 text-bb-muted">{i + 1}</td>
                                             <td className="p-2 text-bb-blue font-medium truncate max-w-[140px]">{peer.name}</td>
                                             <td className="p-2 text-right text-bb-text">${peer.cmp?.toLocaleString()}</td>
@@ -217,7 +217,7 @@ const FinancialsPanel = ({ financials, currency = '$' }) => {
                                 </thead>
                                 <tbody className="divide-y divide-bb-border/30">
                                     {financials.quarterly_results.map((q, i) => (
-                                        <tr key={i} className="hover:bg-white/[0.02]">
+                                        <tr key={i} className="hover:bg-bb-hover">
                                             <td className="p-2 text-bb-blue font-medium sticky left-0 bg-bb-dark">{q.quarter}</td>
                                             <td className="p-2 text-right text-bb-text">{formatUSD(q.revenue)}</td>
                                             <td className="p-2 text-right text-bb-text">{formatUSD(q.expenses)}</td>
@@ -253,7 +253,7 @@ const FinancialsPanel = ({ financials, currency = '$' }) => {
                                 </thead>
                                 <tbody className="divide-y divide-bb-border/30">
                                     {financials.annual_results.map((a, i) => (
-                                        <tr key={i} className="hover:bg-white/[0.02]">
+                                        <tr key={i} className="hover:bg-bb-hover">
                                             <td className="p-2 text-bb-blue font-medium sticky left-0 bg-bb-dark">{a.period}</td>
                                             <td className="p-2 text-right text-bb-text">{formatUSD(a.revenue)}</td>
                                             <td className="p-2 text-right text-bb-text">{formatUSD(a.expenses)}</td>
@@ -751,30 +751,33 @@ const USTradingTerminal = () => {
 
     return (
         <div className="flex flex-col h-full bg-bb-bg text-bb-text font-sans overflow-hidden">
-            <div className="h-14 border-b border-bb-border bg-bb-card px-4 flex justify-between items-center shadow-sm z-30 relative">
-                <div className="flex items-center gap-4 w-1/3">
+            <div className="min-h-[3.5rem] border-b border-bb-border bg-bb-card px-3 md:px-4 py-2 flex flex-wrap justify-between items-center shadow-sm z-30 relative gap-2">
+                <div className="flex items-center gap-4 w-full sm:w-1/3">
                     <SearchBar value={symbol} onSelect={handleSymbolSelect} placeholder="Search US Stocks..." market="US" />
                 </div>
 
-                <div className="flex items-center gap-4 text-xs">
-                    <div className="text-right">
+                <div className="flex items-center gap-2 md:gap-4 text-xs">
+                    <div className="text-right hidden sm:block">
                         <span className="text-bb-muted block">US Market (ET)</span>
                         <span className={`font-bold ${marketStatus?.status === 'OPEN' ? 'text-bb-green' : 'text-bb-red'}`}>{marketStatus?.status || 'CLOSED'}</span>
                     </div>
-                    <div className="text-bb-muted font-mono">{marketStatus?.server_time_et || currentTime} ET</div>
+                    <div className="text-bb-muted font-mono text-[10px] md:text-xs">{marketStatus?.server_time_et || currentTime} ET</div>
+                    <div className={`sm:hidden px-2 py-0.5 rounded border font-bold text-[10px] ${marketStatus?.status === 'OPEN' ? 'bg-bb-green/10 text-bb-green border-bb-green/20' : 'bg-bb-red/10 text-bb-red border-bb-red/20'}`}>
+                        {marketStatus?.status || 'CLOSED'}
+                    </div>
                 </div>
             </div>
 
-            <div className="flex-1 grid grid-cols-12 min-h-0 relative z-10">
+            <div className="flex-1 flex flex-col lg:grid lg:grid-cols-12 min-h-0 relative z-10">
 
-                <div className="col-span-9 flex flex-col min-h-0 overflow-y-auto custom-scrollbar">
-                    <div className="px-6 py-4 flex justify-between items-end border-b border-bb-border bg-bb-bg/50">
+                <div className="lg:col-span-9 flex flex-col min-h-0 overflow-y-auto custom-scrollbar">
+                    <div className="px-3 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row justify-between sm:items-end border-b border-bb-border bg-bb-bg/50 gap-2">
                         <div>
-                            <h1 className="text-2xl font-bold text-bb-text flex items-center gap-2">
+                            <h1 className="text-lg md:text-2xl font-bold text-bb-text flex items-center gap-2">
                                 {companyInfo?.name || symbol}
-                                <span className="text-sm font-normal text-bb-muted bg-bb-gray/10 px-2 py-0.5 rounded">US-EQ</span>
+                                <span className="text-xs md:text-sm font-normal text-bb-muted bg-bb-gray/10 px-2 py-0.5 rounded">US-EQ</span>
                             </h1>
-                            <div className="flex gap-4 mt-1 text-xs text-bb-muted">
+                            <div className="flex gap-2 md:gap-4 mt-1 text-[10px] md:text-xs text-bb-muted flex-wrap">
                                 <span>{companyInfo?.sector || 'Sector N/A'}</span>
                                 <span>|</span>
                                 <span>Cap: {formatMarketCap(companyInfo?.market_cap)}</span>
@@ -841,12 +844,72 @@ const USTradingTerminal = () => {
                         </div>
                         {chartLoading && <div className="absolute inset-0 bg-bb-bg/50 flex items-center justify-center z-20"><Loader className="animate-spin text-bb-blue" /></div>}
                         <div ref={chartContainerRef} className="w-full h-full" />
+
+                        {/* SVG Measure Overlay */}
                         {measureMode && measureData && (
-                            <div className="absolute top-14 right-4 bg-bb-card p-3 rounded border border-bb-border text-xs z-30 shadow-lg">
-                                <div className="font-bold text-bb-muted mb-1">MEASURE</div>
-                                <div>Price: <span className={measureData.priceDiff >= 0 ? 'text-bb-green' : 'text-bb-red'}>{measureData.priceDiff >= 0 ? '+' : ''}{measureData.priceDiff.toFixed(2)} ({measureData.pricePct.toFixed(2)}%)</span></div>
-                                <div>Bars: {measureData.bars}</div>
-                                <div className="text-bb-muted mt-1">From ${measureData.startPrice?.toFixed(2)} → ${measureData.endPrice?.toFixed(2)}</div>
+                            <svg className="absolute inset-0 w-full h-full pointer-events-none z-20" style={{ overflow: 'visible' }}>
+                                <line
+                                    x1={measureData.startX} y1={measureData.startY}
+                                    x2={measureData.endX} y2={measureData.endY}
+                                    stroke={measureData.priceDiff >= 0 ? '#26a69a' : '#ef5350'}
+                                    strokeWidth="1.5" strokeDasharray="6 3" opacity="0.9"
+                                />
+                                <circle cx={measureData.startX} cy={measureData.startY} r="4"
+                                    fill="#ff9900" stroke="#0b0e11" strokeWidth="1.5" />
+                                <circle cx={measureData.endX} cy={measureData.endY} r="4"
+                                    fill={measureData.priceDiff >= 0 ? '#26a69a' : '#ef5350'} stroke="#0b0e11" strokeWidth="1.5" />
+                                <line x1="0" y1={measureData.startY} x2="100%" y2={measureData.startY}
+                                    stroke="#ff9900" strokeWidth="0.5" strokeDasharray="2 4" opacity="0.4" />
+                                <line x1="0" y1={measureData.endY} x2="100%" y2={measureData.endY}
+                                    stroke={measureData.priceDiff >= 0 ? '#26a69a' : '#ef5350'} strokeWidth="0.5" strokeDasharray="2 4" opacity="0.4" />
+                                {(() => {
+                                    const midX = (measureData.startX + measureData.endX) / 2;
+                                    const midY = (measureData.startY + measureData.endY) / 2;
+                                    const labelText = `${measureData.priceDiff >= 0 ? '+' : ''}${measureData.priceDiff.toFixed(2)} (${measureData.pricePct >= 0 ? '+' : ''}${measureData.pricePct.toFixed(2)}%) | ${Math.abs(measureData.bars)} bars`;
+                                    return (
+                                        <g>
+                                            <rect x={midX - 95} y={midY - 22} width="190" height="20" rx="4"
+                                                fill={measureData.priceDiff >= 0 ? '#26a69a' : '#ef5350'} opacity="0.9" />
+                                            <text x={midX} y={midY - 9} textAnchor="middle" fill="white"
+                                                fontSize="10" fontWeight="bold" fontFamily="Consolas, monospace">
+                                                {labelText}
+                                            </text>
+                                        </g>
+                                    );
+                                })()}
+                            </svg>
+                        )}
+
+                        {/* Floating Measure Panel */}
+                        {measureMode && (
+                            <div className="absolute top-14 right-4 bg-bb-card p-3 rounded border border-bb-border text-xs z-30 shadow-lg min-w-[180px]">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="font-bold text-bb-orange tracking-wider text-[10px]">MEASURE</span>
+                                    {measureData ? (
+                                        <button onClick={() => { measureStartRef.current = null; setMeasureData(null); }}
+                                            className="text-[9px] text-bb-muted hover:text-bb-red px-1.5 py-0.5 border border-bb-border rounded">
+                                            CLEAR
+                                        </button>
+                                    ) : (
+                                        <span className="text-[9px] text-bb-muted animate-pulse">Click start point...</span>
+                                    )}
+                                </div>
+                                {measureData ? (
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between">
+                                            <span className="text-bb-muted">Price</span>
+                                            <span className={measureData.priceDiff >= 0 ? 'text-bb-green font-bold' : 'text-bb-red font-bold'}>
+                                                {measureData.priceDiff >= 0 ? '+' : ''}{measureData.priceDiff.toFixed(2)} ({measureData.pricePct >= 0 ? '+' : ''}{measureData.pricePct.toFixed(2)}%)
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between"><span className="text-bb-muted">Bars</span><span className="text-bb-text font-mono">{Math.abs(measureData.bars)}</span></div>
+                                        <div className="border-t border-bb-border/30 pt-1 mt-1 flex justify-between text-[10px]">
+                                            <span className="text-bb-muted">${measureData.startPrice?.toFixed(2)}</span>
+                                            <span className="text-bb-muted">→</span>
+                                            <span className="text-bb-text font-bold">${measureData.endPrice?.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                ) : null}
                             </div>
                         )}
                     </div>
@@ -910,7 +973,7 @@ const USTradingTerminal = () => {
                     </div>
                 </div>
 
-                <div className="col-span-3 border-l border-bb-border min-h-0 flex flex-col bg-bb-card overflow-y-auto custom-scrollbar">
+                <div className="lg:col-span-3 border-t lg:border-t-0 lg:border-l border-bb-border min-h-0 flex flex-col bg-bb-card overflow-y-auto custom-scrollbar">
                     <div className="p-4">
                         <div className="flex bg-bb-bg rounded p-1 mb-4">
                             <button onClick={() => setProductType('INTRADAY')} className={`flex-1 py-1 text-xs font-bold rounded ${productType === 'INTRADAY' ? 'bg-bb-blue text-white shadow' : 'text-bb-muted'}`}>INTRADAY</button>

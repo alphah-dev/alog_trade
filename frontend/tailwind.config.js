@@ -21,6 +21,9 @@ export default {
         'bb-green': 'var(--color-green)',
         'bb-red': 'var(--color-red)',
         'bb-blue': 'var(--color-blue)',
+        'bb-hover': 'var(--hover-overlay)',
+        'bb-active': 'var(--active-overlay)',
+        'bb-backdrop': 'var(--backdrop-overlay)',
       },
       fontFamily: {
         mono: ['Consolas', 'Monaco', 'Courier New', 'monospace'],
