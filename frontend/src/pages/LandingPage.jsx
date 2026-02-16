@@ -207,8 +207,23 @@ const LandingPage = () => {
       ]);
       if (ms.status === 'fulfilled') setNseMarket(ms.value);
       if (ums.status === 'fulfilled') setUsMarket(ums.value);
-      if (idx.status === 'fulfilled') setNseIndices(idx.value);
-      if (uidx.status === 'fulfilled') setUsIndices(uidx.value);
+      if (idx.status === 'fulfilled') {
+        const nseMap = {};
+        idx.value.forEach(i => {
+          if (i.symbol === '^NSEI') nseMap.nifty50 = { ...i, value: i.price };
+          if (i.symbol === '^BSESN') nseMap.sensex = { ...i, value: i.price };
+        });
+        setNseIndices(nseMap);
+      }
+      if (uidx.status === 'fulfilled') {
+        const usMap = {};
+        uidx.value.forEach(i => {
+          if (i.symbol === '^GSPC') usMap.sp500 = { ...i, value: i.price };
+          if (i.symbol === '^IXIC') usMap.nasdaq = { ...i, value: i.price };
+          if (i.symbol === '^DJI') usMap.dow = { ...i, value: i.price };
+        });
+        setUsIndices(usMap);
+      }
     };
 
     fetchAll();

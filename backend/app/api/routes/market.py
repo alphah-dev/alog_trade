@@ -129,6 +129,8 @@ async def get_all_indices():
          "constituents": ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS"]},
         {"symbol": "^NSEBANK", "name": "NIFTY BANK", "category": "Sectoral",
          "constituents": ["HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "KOTAKBANK.NS", "AXISBANK.NS"]},
+        {"symbol": "^BSESN", "name": "SENSEX", "category": "Broad Market",
+         "constituents": ["RELIANCE.BO", "TCS.BO", "HDFCBANK.BO", "INFY.BO", "ICICIBANK.BO"]},
         {"symbol": "^CNXIT", "name": "NIFTY IT", "category": "Sectoral",
          "constituents": ["TCS.NS", "INFY.NS", "HCLTECH.NS", "WIPRO.NS", "TECHM.NS"]},
         {"symbol": "^CNXPHARMA", "name": "NIFTY PHARMA", "category": "Sectoral",
