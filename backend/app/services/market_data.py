@@ -1,5 +1,6 @@
 import asyncio
 import time
+import math
 import yfinance as yf
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -409,6 +410,32 @@ def _set_cached_quote(symbol, data):
     _quote_cache[symbol] = {"data": data, "ts": time.time()}
 
 
+def _clean_float(v, default=0.0):
+    """Replace NaN/Inf with a safe default so JSON serialization never fails."""
+    try:
+        if v is None:
+            return default
+        f = float(v)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    except Exception:
+        return default
+
+
+def _clean_quote(q: dict) -> dict:
+    """Sanitize all numeric fields in a quote dict to be JSON-safe (no NaN/Inf)."""
+    safe = {}
+    for k, v in q.items():
+        if isinstance(v, float):
+            safe[k] = _clean_float(v)
+        elif isinstance(v, int):
+            safe[k] = 0 if (math.isnan(v) if isinstance(v, float) else False) else v
+        else:
+            safe[k] = v
+    return safe
+
+
 
 # ---------------------------------------------------------------------------
 # Fallback data providers (used when yfinance is rate-limited / down)
@@ -444,7 +471,7 @@ def _fetch_quote_stooq(symbol: str) -> dict | None:
         prev = opn if opn > 0 else close
         change = round(close - prev, 2)
         change_pct = round((change / prev * 100), 2) if prev else 0
-        return {
+        return _clean_quote({
             "symbol": symbol.upper(),
             "price": round(close, 2),
             "change": change,
@@ -455,7 +482,7 @@ def _fetch_quote_stooq(symbol: str) -> dict | None:
             "low": round(low, 2),
             "volume": vol,
             "source": "stooq",
-        }
+        })
     except Exception as exc:
         _logger.debug("Stooq fallback failed for %s: %s", symbol, exc)
         return None
@@ -502,7 +529,7 @@ def _fetch_quote_yahoo_json(symbol: str) -> dict | None:
         vol   = int(vols[-1]) if vols else 0
         change = round(close - prev, 2)
         change_pct = round((change / prev * 100), 2) if prev else 0
-        return {
+        return _clean_quote({
             "symbol": symbol.upper(),
             "price": close,
             "change": change,
@@ -513,7 +540,7 @@ def _fetch_quote_yahoo_json(symbol: str) -> dict | None:
             "low": low,
             "volume": vol,
             "source": "yahoo_json",
-        }
+        })
     except Exception as exc:
         _logger.debug("Yahoo JSON fallback failed for %s: %s", symbol, exc)
         return None
@@ -584,9 +611,9 @@ def _fetch_quote_sync(symbol):
             return {"symbol": symbol.upper(), "price": 0, "change": 0, "change_pct": 0,
                     "prev_close": 0, "open": 0, "high": 0, "low": 0, "volume": 0}
 
-    change = round(price - prev, 2)
-    change_pct = round((change / prev * 100), 2) if prev else 0
-    result = {
+    change = round(_clean_float(price - prev), 2)
+    change_pct = round((_clean_float(change / prev) * 100), 2) if prev else 0
+    result = _clean_quote({
         "symbol": symbol.upper(),
         "price": round(price, 2),
         "change": change,
@@ -596,7 +623,7 @@ def _fetch_quote_sync(symbol):
         "high": round(high, 2),
         "low": round(low, 2),
         "volume": volume
-    }
+    })
     _set_cached_quote(symbol, result)
     return result
 
@@ -653,11 +680,11 @@ def _parse_batch_df(df, symbols_list):
             change = round(price - prev_close, 2)
             change_pct = round((change / prev_close * 100), 2) if prev_close else 0
 
-            quote = {
+            quote = _clean_quote({
                 "symbol": symbol.upper(),
                 "price": price, "change": change, "change_pct": change_pct,
                 "prev_close": prev_close, "open": opn, "high": high, "low": low, "volume": vol
-            }
+            })
             _set_cached_quote(symbol, quote)
             results.append(quote)
         except Exception:
