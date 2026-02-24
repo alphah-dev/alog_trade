@@ -378,7 +378,7 @@ US_STOCKS = [
     {"symbol": "UBER", "name": "Uber Technologies"},
     {"symbol": "ABNB", "name": "Airbnb Inc."},
     {"symbol": "PYPL", "name": "PayPal Holdings Inc."},
-    {"symbol": "SQ", "name": "Block Inc. (Square)"},
+    {"symbol": "XYZ", "name": "Block Inc. (formerly Square)"},
     {"symbol": "SHOP", "name": "Shopify Inc."},
     {"symbol": "COIN", "name": "Coinbase Global Inc."},
     {"symbol": "PLTR", "name": "Palantir Technologies"},
@@ -420,7 +420,10 @@ def _fetch_quote_stooq(symbol: str) -> dict | None:
     Returns a quote dict on success, None on failure.
     """
     try:
+        # Stooq uses .IN for Indian NSE/BSE stocks, not .NS / .BO
         stooq_sym = symbol.lower().replace("-", ".")
+        if stooq_sym.endswith(".ns") or stooq_sym.endswith(".bo"):
+            stooq_sym = stooq_sym.rsplit(".", 1)[0] + ".in"
         url = f"https://stooq.com/q/l/?s={stooq_sym}&f=sd2t2ohlcv&h&e=csv"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=8) as resp:
